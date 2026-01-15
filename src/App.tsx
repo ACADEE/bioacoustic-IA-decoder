@@ -4,6 +4,7 @@ import AudioVisualization from './components/AudioVisualization';
 import AnnotationForm from './components/AnnotationForm';
 import TranslationDisplay from './components/TranslationDisplay';
 import BirdIdentificationDisplay from './components/BirdIdentificationDisplay';
+import Audio3DVisualization from './components/Audio3DVisualization';
 import {
   loadYAMNetModel,
   extractAudioEmbedding,
@@ -19,6 +20,11 @@ import {
   analyzeBirdSound,
   BirdDetection,
 } from './services/birdnetService';
+import {
+  analyze3DAudio,
+  Point3D,
+  TemporalFeature,
+} from './services/aves3DService';
 import { AudioPrint, AnnotationFormData } from './types';
 
 type AnalysisState = 'idle' | 'analyzing' | 'unknown' | 'matched' | 'bird_detected';
@@ -43,6 +49,12 @@ function App() {
   // BirdNET state
   const [birdNetAvailable, setBirdNetAvailable] = useState(false);
   const [birdDetections, setBirdDetections] = useState<BirdDetection[]>([]);
+
+  // 3D Visualization state
+  const [points3D, setPoints3D] = useState<Point3D[]>([]);
+  const [temporalFeatures, setTemporalFeatures] = useState<TemporalFeature[]>([]);
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState<number>(0);
+  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
 
   // Load AI model on mount
   useEffect(() => {
@@ -92,6 +104,7 @@ function App() {
     setAnalysisState('analyzing');
     setIsProcessing(true);
     setBirdDetections([]); // Reset bird detections
+    setPoints3D([]); // Reset 3D points
 
     try {
       // Run analyses in parallel
@@ -105,10 +118,28 @@ function App() {
         })(),
 
         // BirdNET analysis (if available)
-        birdNetAvailable ? analyzeBirdSound(blob) : Promise.resolve(null)
+        birdNetAvailable ? analyzeBirdSound(blob) : Promise.resolve(null),
+
+        // 3D visualization analysis (if backend available)
+        birdNetAvailable ? analyze3DAudio(blob).catch(err => {
+          console.warn('3D analysis failed:', err);
+          return null;
+        }) : Promise.resolve(null)
       ];
 
-      const [patternResult, birdNetResult] = await Promise.all(analyses);
+      const [patternResult, birdNetResult, visualizationResult] = await Promise.all(analyses);
+
+      // Process 3D visualization data
+      if (visualizationResult && visualizationResult.success) {
+        const points = visualizationResult.embeddings.embeddings_3d.map((coords: number[]) => ({
+          x: coords[0],
+          y: coords[1],
+          z: coords[2]
+        }));
+        setPoints3D(points);
+        setTemporalFeatures(visualizationResult.temporal_features);
+        console.log(`3D visualization ready with ${points.length} points`);
+      }
 
       // Check BirdNET results first
       if (birdNetResult && birdNetResult.success && birdNetResult.detections.length > 0) {
@@ -253,83 +284,112 @@ function App() {
           </div>
         )}
 
-        {/* Layout: 2 columns on desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Module A - Ingestion & Visualization */}
-          <div className="space-y-8">
-            <section>
-              <h2 className="text-2xl font-bold mb-4 text-gray-300">
-                Module A: Audio Input
-              </h2>
-              <AudioIngestion
-                onAudioReady={handleAudioReady}
-                isRecording={isRecording}
-                setIsRecording={setIsRecording}
-              />
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-bold mb-4 text-gray-300">
-                Audio Visualization
-              </h2>
-              <AudioVisualization audioUrl={audioUrl} />
-            </section>
-          </div>
-
-          {/* Right Column: Module C - Analysis Result */}
-          <div>
+        {/* New Vertical Layout */}
+        <div className="space-y-8">
+          {/* Audio Input Section */}
+          <section>
             <h2 className="text-2xl font-bold mb-4 text-gray-300">
-              Module C: Analysis & Translation
+              Audio Input & Recording
             </h2>
+            <AudioIngestion
+              onAudioReady={handleAudioReady}
+              isRecording={isRecording}
+              setIsRecording={setIsRecording}
+            />
+          </section>
 
-            {/* Idle State */}
-            {analysisState === 'idle' && !isProcessing && (
-              <div className="bg-gray-900 rounded-lg p-12 border-2 border-gray-800 text-center">
-                <svg
-                  className="mx-auto h-20 w-20 text-gray-700 mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+          {/* Top: Bird Identification (full width) */}
+          {analysisState !== 'idle' && !isProcessing && (
+            <>
+              <section>
+                <h2 className="text-3xl font-bold mb-6 text-neon-green flex items-center">
+                  <svg className="w-8 h-8 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H4a1 1 0 001-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z" />
+                  </svg>
+                  Species Identification
+                </h2>
+
+                {/* Bird Detected State */}
+                {analysisState === 'bird_detected' && birdDetections.length > 0 && (
+                  <BirdIdentificationDisplay
+                    detections={birdDetections}
+                    onSelectDetection={(detection) => {
+                      console.log('Selected detection:', detection);
+                    }}
                   />
-                </svg>
-                <h3 className="text-xl font-semibold text-gray-500">
-                  Ready for Analysis
-                </h3>
-                <p className="text-gray-600 mt-2">
-                  Record or upload audio to begin
-                </p>
-              </div>
-            )}
+                )}
 
-            {/* Bird Detected State (BirdNET) */}
-            {analysisState === 'bird_detected' && birdDetections.length > 0 && (
-              <BirdIdentificationDisplay
-                detections={birdDetections}
-                onSelectDetection={(detection) => {
-                  console.log('Selected detection:', detection);
-                }}
-              />
-            )}
+                {/* Matched State */}
+                {analysisState === 'matched' && matchedPrint && (
+                  <TranslationDisplay match={matchedPrint} similarity={similarity} />
+                )}
 
-            {/* Matched State */}
-            {analysisState === 'matched' && matchedPrint && (
-              <TranslationDisplay match={matchedPrint} similarity={similarity} />
-            )}
+                {/* Unknown State */}
+                {analysisState === 'unknown' && (
+                  <AnnotationForm
+                    onSubmit={handleAnnotationSubmit}
+                    isLoading={isProcessing}
+                  />
+                )}
+              </section>
 
-            {/* Unknown State */}
-            {analysisState === 'unknown' && (
-              <AnnotationForm
-                onSubmit={handleAnnotationSubmit}
-                isLoading={isProcessing}
-              />
-            )}
-          </div>
+              {/* Middle: Spectral Analysis */}
+              <section>
+                <h2 className="text-3xl font-bold mb-6 text-neon-blue flex items-center">
+                  <svg className="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                  Spectral Analysis
+                </h2>
+                <AudioVisualization
+                  audioUrl={audioUrl}
+                  onTimeUpdate={setCurrentPlaybackTime}
+                  onPlayStateChange={setIsAudioPlaying}
+                />
+              </section>
+
+              {/* Bottom: 3D Visualization */}
+              <section>
+                <h2 className="text-3xl font-bold mb-6 text-neon-green flex items-center">
+                  <svg className="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                  </svg>
+                  3D Audio Embedding Visualization
+                </h2>
+                <Audio3DVisualization
+                  points={points3D}
+                  temporalFeatures={temporalFeatures}
+                  currentTime={currentPlaybackTime}
+                  isPlaying={isAudioPlaying}
+                />
+              </section>
+            </>
+          )}
+
+          {/* Idle State */}
+          {analysisState === 'idle' && !isProcessing && (
+            <div className="bg-gray-900 rounded-lg p-16 border-2 border-gray-800 text-center">
+              <svg
+                className="mx-auto h-24 w-24 text-gray-700 mb-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
+              </svg>
+              <h3 className="text-2xl font-semibold text-gray-500 mb-4">
+                Ready for Analysis
+              </h3>
+              <p className="text-gray-600 text-lg">
+                Record or upload audio to begin bioacoustic analysis
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Info Footer */}

@@ -4,9 +4,15 @@ import SpectrogramPlugin from 'wavesurfer.js/dist/plugins/spectrogram.js';
 
 interface AudioVisualizationProps {
   audioUrl: string | null;
+  onTimeUpdate?: (time: number) => void;
+  onPlayStateChange?: (isPlaying: boolean) => void;
 }
 
-const AudioVisualization: React.FC<AudioVisualizationProps> = ({ audioUrl }) => {
+const AudioVisualization: React.FC<AudioVisualizationProps> = ({
+  audioUrl,
+  onTimeUpdate,
+  onPlayStateChange,
+}) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const spectrogramRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -56,11 +62,19 @@ const AudioVisualization: React.FC<AudioVisualizationProps> = ({ audioUrl }) => 
       setDuration(wavesurfer.getDuration());
     });
 
-    wavesurfer.on('play', () => setIsPlaying(true));
-    wavesurfer.on('pause', () => setIsPlaying(false));
+    wavesurfer.on('play', () => {
+      setIsPlaying(true);
+      if (onPlayStateChange) onPlayStateChange(true);
+    });
+
+    wavesurfer.on('pause', () => {
+      setIsPlaying(false);
+      if (onPlayStateChange) onPlayStateChange(false);
+    });
 
     wavesurfer.on('timeupdate', (time) => {
       setCurrentTime(time);
+      if (onTimeUpdate) onTimeUpdate(time);
     });
 
     wavesurferRef.current = wavesurfer;

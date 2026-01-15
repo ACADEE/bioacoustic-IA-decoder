@@ -9,6 +9,7 @@ import os
 import tempfile
 import requests
 from birdnet_wrapper import get_birdnet_analyzer
+from aves_wrapper import get_aves_analyzer
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
@@ -16,8 +17,9 @@ CORS(app)  # Enable CORS for React frontend
 # Configuration
 CONFIDENCE_THRESHOLD = 0.25  # Minimum confidence for bird detection
 
-# Get BirdNET analyzer instance
+# Get analyzer instances
 birdnet = get_birdnet_analyzer()
+aves = get_aves_analyzer()
 
 
 def get_bird_photo(bird_name):
@@ -210,15 +212,66 @@ def get_species_info(species_name):
         }), 500
 
 
+@app.route('/api/analyze/3d', methods=['POST'])
+def analyze_audio_3d():
+    """
+    Analyze audio and return 3D embeddings for visualization
+    Uses AVES for animal vocalization analysis
+    """
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+
+        audio_file = request.files['audio']
+
+        if audio_file.filename == '':
+            return jsonify({'error': 'Empty filename'}), 400
+
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            audio_file.save(temp_file.name)
+            temp_path = temp_file.name
+
+        try:
+            # Extract AVES embeddings and 3D coordinates
+            embeddings_data = aves.extract_embeddings(temp_path)
+
+            # Get temporal features for animation
+            temporal_features = aves.get_temporal_features(temp_path)
+
+            return jsonify({
+                'success': True,
+                'embeddings': embeddings_data,
+                'temporal_features': temporal_features,
+                'visualization_ready': True
+            })
+
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    except Exception as e:
+        print(f"Error in 3D analysis: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     # Create models directory if it doesn't exist
-    os.makedirs(BIRDNET_MODEL_PATH, exist_ok=True)
+    models_dir = os.path.join(os.path.dirname(__file__), 'models')
+    os.makedirs(models_dir, exist_ok=True)
 
     print("=" * 50)
-    print("BirdNET Backend API")
+    print("Bioacoustic AI Decoder - Backend API")
+    print("=" * 50)
+    print("Features:")
+    print("  - BirdNET bird identification")
+    print("  - AVES audio embeddings")
+    print("  - 3D visualization support")
     print("=" * 50)
     print("Starting server on http://localhost:5000")
-    print("Make sure to install BirdNET-Analyzer for full functionality")
     print("=" * 50)
 
     app.run(host='0.0.0.0', port=5000, debug=True)
