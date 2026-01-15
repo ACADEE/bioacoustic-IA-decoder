@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import SpectrogramPlugin from 'wavesurfer.js/dist/plugins/spectrogram.js';
 
 interface AudioVisualizationProps {
   audioUrl: string | null;
@@ -14,14 +13,13 @@ const AudioVisualization: React.FC<AudioVisualizationProps> = ({
   onPlayStateChange,
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
-  const spectrogramRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
-    if (!audioUrl || !waveformRef.current || !spectrogramRef.current) return;
+    if (!audioUrl || !waveformRef.current) return;
 
     // Initialize WaveSurfer
     const wavesurfer = WaveSurfer.create({
@@ -32,27 +30,10 @@ const AudioVisualization: React.FC<AudioVisualizationProps> = ({
       barWidth: 2,
       barRadius: 3,
       cursorWidth: 2,
-      height: 100,
+      height: 120,
       barGap: 2,
+      normalize: true,
     });
-
-    // Add Spectrogram plugin
-    wavesurfer.registerPlugin(
-      SpectrogramPlugin.create({
-        container: spectrogramRef.current!,
-        labels: true,
-        height: 256,
-        splitChannels: false,
-        // Thermal color map (cold to hot)
-        colorMap: [
-          [0, 0, 0, 0],        // Transparent
-          [30, 58, 138, 255],  // Cold (blue)
-          [59, 130, 246, 255], // Cool (light blue)
-          [251, 191, 36, 255], // Warm (yellow)
-          [239, 68, 68, 255],  // Hot (red)
-        ],
-      })
-    );
 
     // Load audio
     wavesurfer.load(audioUrl);
@@ -164,28 +145,21 @@ const AudioVisualization: React.FC<AudioVisualizationProps> = ({
         </div>
       </div>
 
-      {/* Spectrogram */}
+      {/* Spectrogram - Simplified View */}
       <div className="bg-gray-900 rounded-lg p-6 border-2 border-gray-800">
         <h3 className="text-xl font-semibold mb-4 text-neon-blue">
-          Spectrogram Analysis
+          Audio Frequency Analysis
         </h3>
-        <div ref={spectrogramRef} className="rounded-lg overflow-hidden"></div>
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-thermal-cold rounded"></div>
-              <span className="text-gray-400">Calm</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-thermal-warm rounded"></div>
-              <span className="text-gray-400">Moderate</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-thermal-hot rounded"></div>
-              <span className="text-gray-400">Intense</span>
-            </div>
-          </div>
-          <span className="text-gray-500">Frequency (Hz) vs Time (s)</span>
+        <div className="bg-gray-800 rounded-lg p-8 text-center">
+          <svg className="w-16 h-16 mx-auto mb-4 text-neon-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+          <p className="text-gray-400">
+            Waveform visualization active
+          </p>
+          <p className="text-gray-600 text-sm mt-2">
+            Full spectrogram analysis available via 3D visualization below
+          </p>
         </div>
       </div>
     </div>
