@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Audio prints collection
+    match /audio_prints/{printId} {
+      // Anyone can read audio prints
+      allow read: if true;
+
+      // Only authenticated users can create new audio prints
+      // For now, allow anyone to write (change this in production!)
+      allow create: if true;
+
+      // Only the creator can update or delete (requires auth)
+      // allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+/*
+ * IMPORTANT NOTES FOR DEPLOYMENT:
+ *
+ * 1. For production, you should implement Firebase Authentication
+ * 2. Restrict write access to authenticated users only
+ * 3. Add user ID tracking to audio prints
+ * 4. Consider rate limiting to prevent abuse
+ *
+ * To apply these rules:
+ * 1. Go to Firebase Console > Firestore Database > Rules
+ * 2. Copy and paste these rules
+ * 3. Click "Publish"
+ */
