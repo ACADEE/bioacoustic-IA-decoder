@@ -29,7 +29,7 @@ export const loadYAMNetModel = async (): Promise<void> => {
  * Extract audio features using Meyda
  * Creates a rich audio fingerprint with multiple features
  */
-const extractMeydaFeatures = (audioData: Float32Array, sampleRate: number) => {
+const extractMeydaFeatures = (audioData: Float32Array, _sampleRate: number) => {
   const features: number[] = [];
 
   // Define frame parameters

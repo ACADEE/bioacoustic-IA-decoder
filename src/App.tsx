@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import AudioIngestion from './components/AudioIngestion';
 import AudioVisualization from './components/AudioVisualization';
 import AnnotationForm from './components/AnnotationForm';
@@ -26,7 +26,6 @@ function App() {
   // AI state
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelLoading, setModelLoading] = useState(true);
-  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [embedding, setEmbedding] = useState<number[] | null>(null);
 
   // Analysis state
@@ -74,7 +73,6 @@ function App() {
     try {
       // Convert to AudioBuffer
       const buffer = await audioBufferFromBlob(blob);
-      setAudioBuffer(buffer);
 
       // Extract embedding
       const embeddingVector = await extractAudioEmbedding(buffer);

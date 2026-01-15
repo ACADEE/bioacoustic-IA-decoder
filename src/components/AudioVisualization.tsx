@@ -31,7 +31,7 @@ const AudioVisualization: React.FC<AudioVisualizationProps> = ({ audioUrl }) => 
     });
 
     // Add Spectrogram plugin
-    const spectrogram = wavesurfer.registerPlugin(
+    wavesurfer.registerPlugin(
       SpectrogramPlugin.create({
         container: spectrogramRef.current!,
         labels: true,
