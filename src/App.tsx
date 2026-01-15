@@ -3,6 +3,7 @@ import AudioIngestion from './components/AudioIngestion';
 import AudioVisualization from './components/AudioVisualization';
 import AnnotationForm from './components/AnnotationForm';
 import TranslationDisplay from './components/TranslationDisplay';
+import BirdIdentificationDisplay from './components/BirdIdentificationDisplay';
 import {
   loadYAMNetModel,
   extractAudioEmbedding,
@@ -13,9 +14,14 @@ import {
   saveAudioPrint,
   findSimilarAudioPrint,
 } from './services/firebaseService';
+import {
+  checkBirdNetHealth,
+  analyzeBirdSound,
+  BirdDetection,
+} from './services/birdnetService';
 import { AudioPrint, AnnotationFormData } from './types';
 
-type AnalysisState = 'idle' | 'analyzing' | 'unknown' | 'matched';
+type AnalysisState = 'idle' | 'analyzing' | 'unknown' | 'matched' | 'bird_detected';
 
 function App() {
   // Audio state
@@ -34,6 +40,10 @@ function App() {
   const [similarity, setSimilarity] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // BirdNET state
+  const [birdNetAvailable, setBirdNetAvailable] = useState(false);
+  const [birdDetections, setBirdDetections] = useState<BirdDetection[]>([]);
+
   // Load AI model on mount
   useEffect(() => {
     const initModel = async () => {
@@ -48,7 +58,19 @@ function App() {
       }
     };
 
+    // Check if BirdNET backend is available
+    const checkBirdNet = async () => {
+      const available = await checkBirdNetHealth();
+      setBirdNetAvailable(available);
+      if (available) {
+        console.log('BirdNET backend is available for bird identification!');
+      } else {
+        console.warn('BirdNET backend not available. Bird identification disabled.');
+      }
+    };
+
     initModel();
+    checkBirdNet();
   }, []);
 
   // Handle new audio ready
@@ -69,25 +91,35 @@ function App() {
   const analyzeAudio = async (blob: Blob) => {
     setAnalysisState('analyzing');
     setIsProcessing(true);
+    setBirdDetections([]); // Reset bird detections
 
     try {
-      // Convert to AudioBuffer
-      const buffer = await audioBufferFromBlob(blob);
+      // Run analyses in parallel
+      const analyses = [
+        // Audio embedding analysis (always run)
+        (async () => {
+          const buffer = await audioBufferFromBlob(blob);
+          const embeddingVector = await extractAudioEmbedding(buffer);
+          setEmbedding(embeddingVector);
+          return await findSimilarAudioPrint(embeddingVector, 0.85);
+        })(),
 
-      // Extract embedding
-      const embeddingVector = await extractAudioEmbedding(buffer);
-      setEmbedding(embeddingVector);
+        // BirdNET analysis (if available)
+        birdNetAvailable ? analyzeBirdSound(blob) : Promise.resolve(null)
+      ];
 
-      // Search for similar patterns
-      const { match, similarity: sim } = await findSimilarAudioPrint(
-        embeddingVector,
-        0.85 // 85% threshold
-      );
+      const [patternResult, birdNetResult] = await Promise.all(analyses);
 
-      if (match) {
-        // Pattern recognized!
-        setMatchedPrint(match);
-        setSimilarity(sim);
+      // Check BirdNET results first
+      if (birdNetResult && birdNetResult.success && birdNetResult.detections.length > 0) {
+        // Bird detected!
+        setBirdDetections(birdNetResult.detections);
+        setAnalysisState('bird_detected');
+        console.log(`BirdNET detected ${birdNetResult.detections_count} birds`);
+      } else if (patternResult.match) {
+        // Pattern recognized in our database
+        setMatchedPrint(patternResult.match);
+        setSimilarity(patternResult.similarity);
         setAnalysisState('matched');
       } else {
         // Unknown pattern
@@ -275,6 +307,16 @@ function App() {
               </div>
             )}
 
+            {/* Bird Detected State (BirdNET) */}
+            {analysisState === 'bird_detected' && birdDetections.length > 0 && (
+              <BirdIdentificationDisplay
+                detections={birdDetections}
+                onSelectDetection={(detection) => {
+                  console.log('Selected detection:', detection);
+                }}
+              />
+            )}
+
             {/* Matched State */}
             {analysisState === 'matched' && matchedPrint && (
               <TranslationDisplay match={matchedPrint} similarity={similarity} />
@@ -293,11 +335,25 @@ function App() {
         {/* Info Footer */}
         <footer className="mt-12 text-center text-gray-600 text-sm">
           <p>
-            Powered by TensorFlow.js (YAMNet) • Firebase • React • Tailwind CSS
+            Powered by TensorFlow.js • Firebase •{' '}
+            {birdNetAvailable && (
+              <span className="text-neon-green">BirdNET-Analyzer</span>
+            )}
+            {!birdNetAvailable && <span>MFCC Analysis</span>} • React • Tailwind CSS
           </p>
           <p className="mt-1">
             Module B (AI Engine) runs automatically in the background
           </p>
+          {birdNetAvailable && (
+            <p className="mt-1 text-neon-green text-xs">
+              ✓ BirdNET backend connected - Enhanced bird identification enabled
+            </p>
+          )}
+          {!birdNetAvailable && (
+            <p className="mt-1 text-yellow-600 text-xs">
+              ⚠ BirdNET backend offline - Using fallback audio analysis
+            </p>
+          )}
         </footer>
       </main>
     </div>
